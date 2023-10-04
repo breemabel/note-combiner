@@ -5,7 +5,7 @@ function TextFileDisplay() {
   // State variables to manage data and user interactions
   const [textFilesData, setTextFilesData] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(-1); // Index of the currently displayed note
 
   // Function to handle file input change
   const handleFileChange = (event) => {
@@ -17,18 +17,36 @@ function TextFileDisplay() {
   const handleUpload = async () => {
     if (selectedFile) {
       const reader = new FileReader();
+      const fileType = selectedFile.name.endsWith('.json') ? 'json' : 'zip';
 
       reader.onload = async () => {
-        const zip = new JSZip();
-        const zipData = await zip.loadAsync(reader.result);
-
-        // Call traverseFolders to parse the ZIP contents
-        const parsedData = await traverseFolders(zipData.files);
-        setTextFilesData(parsedData);
+        const fileData = reader.result;
+        if (fileType === 'zip') {
+          // Parse ZIP file
+          const zip = new JSZip();
+          const zipData = await zip.loadAsync(fileData);
+          const parsedData = await traverseFolders(zipData.files);
+          setTextFilesData(parsedData);
+          setCurrentIndex(0);
+        } else if (fileType === 'json') {
+          // Parse JSON file and update textFilesData
+          try {
+            const jsonData = JSON.parse(fileData);
+            setTextFilesData(jsonData);
+            setCurrentIndex(0);
+          } catch (error) {
+            console.error('Error parsing JSON:', error);
+          }
+        }
       };
 
       // Read the selected file as an ArrayBuffer
-      reader.readAsArrayBuffer(selectedFile);
+      if (fileType === 'zip') {
+        reader.readAsArrayBuffer(selectedFile);
+      }
+      else if (fileType === 'json'){
+        reader.readAsText(selectedFile);
+      }
     }
   };
 
@@ -65,32 +83,49 @@ function TextFileDisplay() {
     return parsedData;
   };
 
+  const handleTag = () => {
+
+  }
+
+  const handleEdit = () => {
+
+  }
+
+  const handleDelete = () => {
+
+  }
+
+
   // Function to handle exporting textFilesData to JSON
   const handleExport = () => {
     // Convert the textFilesData to JSON format
     const jsonData = JSON.stringify(textFilesData, null, 2);
-  
+
     // Create a Blob object containing the JSON data
     const blob = new Blob([jsonData], { type: 'application/json' });
-  
+
     // Create a temporary link element
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'textFilesData.json';
-  
+
     // Trigger a click event on the link element to initiate the download
     a.click();
-  
+
     // Clean up by revoking the URL
     URL.revokeObjectURL(a.href);
   };
 
-  // Update currentFileIndex when textFilesData changes
+  // useEffect to update currentIndex when textFilesData changes
   useEffect(() => {
     if (textFilesData.length > 0) {
-      setCurrentFileIndex(0);
+      setCurrentIndex(1);
     }
   }, [textFilesData]);
+
+  // Determine if the previous and next notes can be displayed
+  const canShowPrevious = currentIndex > 0;
+  const canShowNext = currentIndex < textFilesData.length - 1;
 
   return (
     <div className="d-flex flex-column justify-content-start align-items-center vh-100">
@@ -105,23 +140,23 @@ function TextFileDisplay() {
             <br />
             {/* Button to initiate file upload */}
             <button onClick={handleUpload} className="btn btn-primary mt-3">
-              Upload
+              Confirm Upload
             </button>
           </div>
           <div>
             <div className="btn-group" role="group">
               {/* Button to navigate to the previous note */}
               <button
-                onClick={() => setCurrentFileIndex(Math.max(0, currentFileIndex - 1))}
-                disabled={currentFileIndex === 0}
+                onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                disabled={!canShowPrevious}
                 type="button" className="btn btn-outline-primary mt-3"
               >
                 Previous Note
               </button>
               {/* Button to navigate to the next note */}
               <button
-                onClick={() => setCurrentFileIndex(Math.min(textFilesData.length - 1, currentFileIndex + 1))}
-                disabled={currentFileIndex === textFilesData.length - 1}
+                onClick={() => setCurrentIndex(Math.min(textFilesData.length - 1, currentIndex + 1))}
+                disabled={!canShowNext}
                 type="button" className="btn btn-outline-primary mt-3"
               >
                 Next Note
@@ -134,27 +169,53 @@ function TextFileDisplay() {
                 onClick={handleExport}
                 type="button" className="btn btn-outline-primary mt-3"
               >
-                Save
-              </button>
-              {/* Placeholder Edit button */}
-              <button
-                type="button" className="btn btn-outline-primary mt-3"
-              >
-                Edit
+                Save as JSON
               </button>
             </div>
           </div>
         </div>
 
-        {/* Render the current note */}
         {textFilesData.length === 0 ? (
           <p>No data to display.</p>
         ) : (
-          <div className="bg-light p-4 rounded">
-            {/* Display the content of the current note */}
-            <pre id="note">{textFilesData[currentFileIndex].content}</pre>
-            {/* Display the title of the current note */}
-            <footer><h5>Title: {textFilesData[currentFileIndex].title} </h5> </footer>
+          <div>
+            {/* Display the previous note if available */}
+            {canShowPrevious && (
+              <div className="bg-light p-4 rounded">
+                <pre id="note">{textFilesData[currentIndex - 1].content}</pre>
+                <footer><h5>Title: {textFilesData[currentIndex - 1].title} </h5> </footer>
+                <div className="btn-group" role="group">
+                  <button onClick={handleTag} type="button" className="btn btn-outline-primary dropdown-toggle">Tag</button>
+                  <button onClick={handleEdit} type="button" className="btn btn-outline-primary">Edit</button>
+                  <button onClick={handleDelete} type="button" className="btn btn-outline-primary">Delete</button>
+                </div>
+                <hr />
+              </div>
+            )}
+            {/* Display the current note */}
+            <div className="bg-light p-4 rounded">
+              <pre id="note">{textFilesData[currentIndex].content}</pre>
+              <footer><h5>Title: {textFilesData[currentIndex].title} </h5> </footer>
+              <div className="btn-group" role="group">
+                <button onClick={handleTag} type="button" className="btn btn-outline-primary dropdown-toggle">Tag</button>
+                <button onClick={handleEdit} type="button" className="btn btn-outline-primary">Edit</button>
+                <button onClick={handleDelete} type="button" className="btn btn-outline-primary">Delete</button>
+              </div>
+              <hr />
+            </div>
+            {/* Display the next note if available */}
+            {canShowNext && (
+              <div className="bg-light p-4 rounded">
+                <pre id="note">{textFilesData[currentIndex + 1].content}</pre>
+                <footer><h5>Title: {textFilesData[currentIndex + 1].title} </h5> </footer>
+                <div className="btn-group" role="group">
+                  <button onClick={handleTag} type="button" className="btn btn-outline-primary dropdown-toggle">Tag</button>
+                  <button onClick={handleEdit} type="button" className="btn btn-outline-primary">Edit</button>
+                  <button onClick={handleDelete} type="button" className="btn btn-outline-primary">Delete</button>
+                </div>
+                <hr />
+              </div>
+            )}
           </div>
         )}
       </div>
